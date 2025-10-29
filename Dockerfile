@@ -6,7 +6,9 @@ USER root
 
 RUN add-apt-repository ppa:rmescandon/yq && \
     curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null && \
-    echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+    echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /usr/share/keyrings/nodesource-repo.gpg && \
+    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/nodesource-repo.gpg] https://deb.nodesource.com/node_23.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list > /dev/null
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -18,6 +20,7 @@ RUN apt-get update \
       gzip \
       helm \
       jq \
+      nodejs \
       tar \
       unzip \
       yq \
@@ -36,6 +39,9 @@ RUN case "$TARGETARCH" in \
     unzip awscliv2.zip && \
     ./aws/install && \
     rm -rf aws awscliv2.zip
+
+RUN wget -qO /usr/local/bin/earthly https://github.com/earthly/earthly/releases/download/v0.8.16/earthly-linux-$TARGETARCH && \
+    chmod +x /usr/local/bin/earthly
 
 COPY wait_for_docker_then_run.sh /usr/local/bin/wait_for_docker_then_run.sh
 
