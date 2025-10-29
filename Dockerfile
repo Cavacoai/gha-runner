@@ -1,5 +1,7 @@
 FROM summerwind/actions-runner:ubuntu-22.04
 
+ARG TARGETARCH
+
 USER root
 
 RUN add-apt-repository ppa:rmescandon/yq && \
@@ -24,9 +26,16 @@ RUN apt-get update \
       zstd \
      && apt-get clean \
      && rm -r /var/lib/apt/lists/*
-     RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-        unzip awscliv2.zip && \
-        ./aws/install
+
+RUN case "$TARGETARCH" in \
+        amd64) AWSCLI_ARCHIVE=awscli-exe-linux-x86_64.zip ;; \
+        arm64) AWSCLI_ARCHIVE=awscli-exe-linux-aarch64.zip ;; \
+        *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2 && exit 1 ;; \
+    esac && \
+    curl -fsSL "https://awscli.amazonaws.com/${AWSCLI_ARCHIVE}" -o awscliv2.zip && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf aws awscliv2.zip
 
 COPY wait_for_docker_then_run.sh /usr/local/bin/wait_for_docker_then_run.sh
 
