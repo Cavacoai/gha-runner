@@ -1,6 +1,8 @@
-FROM summerwind/actions-runner:ubuntu-22.04
+FROM summerwind/actions-runner:ubuntu-22.04@sha256:425a9741c314015183af19e333b22c74ca5a49adbe683ebeefbe90f98badd405
 
 ARG TARGETARCH
+
+RUN test "$(/runnertmp/bin/Runner.Listener --version)" = "2.337.0"
 
 USER root
 

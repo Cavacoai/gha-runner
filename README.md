@@ -1,5 +1,24 @@
 # gha-runner
 
+## Cavaco image
+
+The Cavaco image extends the pinned `summerwind/actions-runner:ubuntu-22.04` base
+with runner 2.337.0 and the tools in this repository. It supports Linux ARM64 and AMD64.
+
+`build-and-publish` builds pull requests without publishing. A version tag matching
+`*.*.*`, or a manual run from `main`, publishes both architectures to the `arc-runner`
+repository in Amazon ECR. For the prepared runner update, use image tag `20261014-0`.
+
+Publication requires the release app secrets `CAVACO_RELEASER_APP_ID` and
+`CAVACO_RELEASER_APP_TOKEN`, plus the variables `AWS_DEFAULT_ACCOUNT`,
+`AWS_DEFAULT_REGION`, and `AWS_OIDC_ROLE_NAME`. The app token authenticates GitHub
+checkout; AWS credentials are temporary credentials obtained through GitHub OIDC.
+
+Publishing does not update Kubernetes. Verify the published image and both
+architectures before merging the corresponding image-reference PR in `argocd-ops`.
+
+## Upstream reference
+
 Automated updated builds starting with `ghcr.io/actions/actions-runner` image. Adds with utilities installed so actions actually work.
 
 Adds the following packages to the base image.

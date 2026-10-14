@@ -6,28 +6,80 @@ on:
     tags:
     - '*.*.*'
   pull_request: {}
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: ECR image tag
+        required: true
+        default: '20261014-0'
+        type: string
 
-env:
-  DOCKER_ORG: mobilecoin
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   docker:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
+    - name: Create Cavaco Releaser app token
+      if: github.event_name != 'pull_request'
+      id: app-token
+      uses: actions/create-github-app-token@v3.2.0
+      with:
+        client-id: ${{ secrets.CAVACO_RELEASER_APP_ID }}
+        private-key: ${{ secrets.CAVACO_RELEASER_APP_TOKEN }}
+        permission-contents: read
+
     - name: Checkout
-      uses: mobilecoinofficial/gh-actions/checkout@v0
+      uses: actions/checkout@v4
+      with:
+        token: ${{ steps.app-token.outputs.token || github.token }}
+        persist-credentials: false
+
+    - name: Validate publication configuration
+      if: github.event_name != 'pull_request'
+      id: publication
+      env:
+        IMAGE_TAG: ${{ inputs.image-tag || github.ref_name }}
+        AWS_ACCOUNT: ${{ vars.AWS_DEFAULT_ACCOUNT }}
+        AWS_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+        AWS_ROLE: ${{ vars.AWS_OIDC_ROLE_NAME }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$IMAGE_TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+          echo 'Invalid ECR image tag' >&2
+          exit 1
+        fi
+        : "${AWS_ACCOUNT:?Configure AWS_DEFAULT_ACCOUNT}"
+        : "${AWS_REGION:?Configure AWS_DEFAULT_REGION}"
+        : "${AWS_ROLE:?Configure AWS_OIDC_ROLE_NAME}"
+        echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+    - name: Configure AWS credentials
+      if: github.event_name != 'pull_request'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ vars.AWS_DEFAULT_ACCOUNT }}:role/${{ vars.AWS_OIDC_ROLE_NAME }}
+        aws-region: ${{ vars.AWS_DEFAULT_REGION }}
+
+    - name: Login to Amazon ECR
+      if: github.event_name != 'pull_request'
+      id: ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Build/Publish Image
-      uses: mobilecoinofficial/gh-actions/docker@v0
+      uses: docker/build-push-action@v6
       with:
-        dockerfile: ./Dockerfile
-        emulation: 'true'
-        flavor: latest=true
-        images: mobilecoin/gha-runner
+        context: .
+        file: ./Dockerfile
         platforms: linux/amd64,linux/arm64
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        push: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
-        tags: |
-          type=semver,pattern={{version}},priority=20
-          type=sha,priority=10
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ github.event_name != 'pull_request' && format('{0}/arc-runner:{1}', steps.ecr.outputs.registry, steps.publication.outputs.tag) || '' }}
